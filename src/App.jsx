@@ -18,9 +18,21 @@ export default function AQIHomePage() {
   };
 
   const calculateAQI = (data) => {
-    // US EPA AQI calculation - simplified
-    const pm25 = data.PM2?.concentration || 0;
-    const pm10 = data.PM10?.concentration || 0;
+    if (!data) return 0;
+    
+    // 1) Prefer API's own overall AQI if present
+    if (typeof data.overall_aqi === "number") {
+      return Math.round(data.overall_aqi);
+    }
+    
+    // 2) Else take maximum of individual pollutant AQIs if present
+    const pollutantKeys = ["PM2.5", "PM10", "O3", "NO2", "SO2", "CO"];
+    const aqiValues = pollutantKeys.map((key) => data[key]?.aqi ?? 0);
+    const maxAQI = Math.max(...aqiValues);
+    if (maxAQI > 0) return Math.round(maxAQI);
+    
+    // 3) Fallback – approximate from PM2.5 concentration
+    const pm25 = data["PM2.5"]?.concentration || 0;
     
     // Simple AQI estimation based on PM2.5
     let aqi;
@@ -30,7 +42,7 @@ export default function AQIHomePage() {
     else if (pm25 <= 150.4) aqi = 150 + ((200 - 150) / (150.4 - 55.5)) * (pm25 - 55.5);
     else if (pm25 <= 250.4) aqi = 200 + ((300 - 200) / (250.4 - 150.5)) * (pm25 - 150.5);
     else aqi = 300 + ((500 - 300) / (500.4 - 250.5)) * (pm25 - 250.5);
-
+    
     return Math.round(Math.max(aqi, 0));
   };
 
@@ -62,6 +74,7 @@ export default function AQIHomePage() {
   const fetchAQI = async (city) => {
     setLoading(true);
     setError(null);
+    
     try {
       const res = await fetch(`https://api.api-ninjas.com/v1/airquality?city=${city}`, {
         headers: { 'X-Api-Key': import.meta.env.VITE_API_NINJA_KEY }
@@ -98,134 +111,126 @@ export default function AQIHomePage() {
   const category = getAQICategory(currentAQI);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <Wind className="w-12 h-12 text-blue-600" />
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Air Quality Monitor
-            </h1>
-          </div>
-          <p className="text-gray-600 text-lg">Real-time air quality data for cities worldwide</p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800 py-12 px-4">
+      {/* Header */}
+      <div className="max-w-6xl mx-auto mb-12 text-center">
+        <h1 className="text-5xl font-bold text-gray-100 mb-4 flex items-center justify-center gap-3">
+          <Wind className="w-12 h-12 text-blue-400" />
+          Air Quality Monitor
+        </h1>
+        <p className="text-gray-300 text-lg">Real-time air quality data for cities worldwide</p>
+      </div>
+
+      {/* Search Bar */}
+      <div className="max-w-2xl mx-auto mb-12 relative">
+        <input
+          type="text"
+          value={searchCity}
+          onChange={(e) => setSearchCity(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Search for a city..."
+          className="w-full px-6 py-4 pr-14 rounded-2xl shadow-xl text-lg focus:outline-none focus:ring-4 focus:ring-blue-500 transition-all bg-gray-800 text-gray-100 placeholder-gray-400"
+          disabled={loading}
+        />
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl transition-colors disabled:opacity-50"
+        >
+          {loading ? <Loader className="w-6 h-6 animate-spin" /> : <Search className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {error && (
+        <div className="max-w-2xl mx-auto mb-8 bg-red-900 border border-red-700 text-red-100 px-6 py-4 rounded-xl flex items-center gap-3">
+          <AlertCircle className="w-6 h-6 flex-shrink-0" />
+          <span>{error}</span>
         </div>
+      )}
 
-        {/* Search Bar */}
-        <div className="max-w-2xl mx-auto relative">
-          <input
-            type="text"
-            value={searchCity}
-            onChange={(e) => setSearchCity(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Search for a city..."
-            className="w-full px-6 py-4 pr-14 rounded-2xl shadow-xl text-lg focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all bg-white"
-            disabled={loading}
-          />
-          <button
-            onClick={handleSearch}
-            disabled={loading}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white p-3 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-lg"
-          >
-            {loading ? <Loader className="w-6 h-6 animate-spin" /> : <Search className="w-6 h-6" />}
-          </button>
-        </div>
+      {aqiData && !loading && (
+        <>
+          {/* Main AQI Display Card */}
+          <div className="max-w-4xl mx-auto mb-12">
+            <div className={`bg-gradient-to-br ${category.gradient} rounded-3xl shadow-2xl p-8 text-white relative overflow-hidden`}>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full -mr-32 -mt-32"></div>
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white opacity-10 rounded-full -ml-24 -mb-24"></div>
+              
+              {/* Location */}
+              <div className="relative flex items-center gap-2 mb-8">
+                <MapPin className="w-6 h-6" />
+                <span className="text-xl font-semibold">{currentCity}</span>
+              </div>
 
-        {error && (
-          <div className="max-w-2xl mx-auto bg-red-50 border-2 border-red-200 rounded-2xl p-4 flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
-            <p className="text-red-700">{error}</p>
-          </div>
-        )}
+              {/* Main AQI Number */}
+              <div className="relative text-center mb-8">
+                <div className="text-8xl font-bold mb-4">{currentAQI}</div>
+                <div className="text-2xl font-semibold uppercase tracking-wider">{category.label}</div>
+              </div>
 
-        {aqiData && !loading && (
-          <>
-            {/* Main AQI Display Card */}
-            <div className={`bg-gradient-to-br ${category.gradient} rounded-3xl shadow-2xl p-8 text-white transform hover:scale-[1.02] transition-all`}>
-              <div className="space-y-6">
-                {/* Location */}
-                <div className="flex items-center gap-2 text-white/90">
-                  <MapPin className="w-5 h-5" />
-                  <span className="text-xl font-medium">{currentCity}</span>
-                </div>
-
-                {/* Main AQI Number */}
-                <div className="text-center py-8">
-                  <div className="text-8xl font-bold mb-2">{currentAQI}</div>
-                  <div className="text-3xl font-semibold tracking-wide">{category.label}</div>
-                </div>
-
-                {/* Health Recommendation */}
-                <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-6">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-                    <div>
-                      <h3 className="font-semibold text-xl mb-2">Health Recommendation</h3>
-                      <p className="text-white/90 leading-relaxed">{getHealthRecommendation(currentAQI)}</p>
-                    </div>
+              {/* Health Recommendation */}
+              <div className="relative bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700">
+                <div className="flex items-start gap-4">
+                  <AlertCircle className="w-6 h-6 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="font-bold text-lg mb-2 text-gray-100">Health Recommendation</h3>
+                    <p className="text-gray-200 leading-relaxed">{getHealthRecommendation(currentAQI)}</p>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Pollutants Overview */}
-            <div className="bg-white rounded-3xl shadow-xl p-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                <TrendingUp className="w-8 h-8 text-blue-600" />
-                Pollutants Breakdown
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Object.entries(aqiData).map(([pollutant, data]) => {
-                  if (!data || typeof data !== 'object' || !data.concentration) return null;
-                  const categoryLabel = getPollutantCategory(data.concentration, pollutant);
-                  
-                  return (
-                    <div key={pollutant} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 hover:shadow-lg transition-shadow">
-                      <div className="text-gray-600 text-sm font-medium mb-2">{pollutant}</div>
-                      <div className="text-3xl font-bold text-gray-800 mb-1">
-                        {data.concentration.toFixed(1)}
-                      </div>
-                      <div className="text-sm text-gray-500 mb-3">μg/m³</div>
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                        categoryLabel === 'Good' ? 'bg-green-100 text-green-700' : 
-                        categoryLabel === 'Moderate' ? 'bg-yellow-100 text-yellow-700' : 
-                        'bg-orange-100 text-orange-700'
-                      }`}>
-                        {categoryLabel}
-                      </span>
+          {/* Pollutants Overview */}
+          <div className="max-w-6xl mx-auto mb-12">
+            <h2 className="text-3xl font-bold text-gray-100 mb-6 flex items-center gap-3">
+              <Thermometer className="w-8 h-8 text-blue-400" />
+              Pollutants Breakdown
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Object.entries(aqiData).map(([pollutant, data]) => {
+                if (!data || typeof data !== 'object' || !data.concentration) return null;
+                const categoryLabel = getPollutantCategory(data.concentration, pollutant);
+                return (
+                  <div key={pollutant} className="bg-gray-800 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow border border-gray-700">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-bold text-gray-100">{pollutant}</h3>
+                      <Wind className="w-6 h-6 text-blue-400" />
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="text-4xl font-bold text-blue-400 mb-2">
+                      {data.concentration.toFixed(1)}
+                      <span className="text-lg text-gray-400 ml-2">μg/m³</span>
+                    </div>
+                    <div className="text-gray-400 text-sm">{categoryLabel}</div>
+                  </div>
+                );
+              })}
             </div>
+          </div>
 
-            {/* Additional Info */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-2xl p-6 shadow-xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <Eye className="w-8 h-8" />
-                  <h3 className="text-2xl font-bold">About AQI</h3>
-                </div>
-                <p className="text-blue-50 leading-relaxed">
-                  The Air Quality Index (AQI) is calculated based on major air pollutants. 
-                  Lower values indicate better air quality, while higher values indicate worse conditions.
-                </p>
-              </div>
-
-              <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-2xl p-6 shadow-xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <Droplets className="w-8 h-8" />
-                  <h3 className="text-2xl font-bold">Stay Protected</h3>
-                </div>
-                <p className="text-purple-50 leading-relaxed">
-                  Monitor air quality regularly and adjust outdoor activities accordingly. 
-                  Consider wearing masks during high pollution days.
-                </p>
-              </div>
+          {/* Additional Info */}
+          <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-6">
+            <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-700">
+              <h3 className="text-xl font-bold text-gray-100 mb-3 flex items-center gap-2">
+                <Eye className="w-6 h-6 text-blue-400" />
+                About AQI
+              </h3>
+              <p className="text-gray-300 leading-relaxed">
+                The Air Quality Index (AQI) is calculated based on major air pollutants. Lower values indicate better air quality, while higher values indicate worse conditions.
+              </p>
             </div>
-          </>
-        )}
-      </div>
+            <div className="bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-700">
+              <h3 className="text-xl font-bold text-gray-100 mb-3 flex items-center gap-2">
+                <Droplets className="w-6 h-6 text-blue-400" />
+                Stay Protected
+              </h3>
+              <p className="text-gray-300 leading-relaxed">
+                Monitor air quality regularly and adjust outdoor activities accordingly. Consider wearing masks during high pollution days.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
