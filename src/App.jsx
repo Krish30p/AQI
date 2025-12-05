@@ -19,6 +19,20 @@ export default function AQIHomePage() {
 
   const category = getAQICategory(currentAQI);
 
+  const API_KEY = import.meta.env.VITE_API_NINJA_KEY;
+
+async function getAqi(city) {
+  const res = await fetch(`https://api.api-ninjas.com/v1/airquality?city=${city}`, {
+    headers: {
+      'X-Api-Key': API_KEY
+    }
+  });
+
+  const data = await res.json();
+  return data;
+}
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 via-blue-400 to-cyan-400 p-6 md:p-3">
       <div className="max-w-8xl mx-5">
