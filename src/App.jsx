@@ -173,7 +173,7 @@ export default function AQIHomePage() {
       <div className="max-w-6xl mx-auto mb-5 text-center">
         <h1 className="text-5xl font-bold text-gray-100 mb-5 flex items-center justify-center gap-3">
           <Wind className="w-12 h-12 text-blue-400" />
-          Air Quality Monitor
+          Air Quality Index
         </h1>
         <p className="text-gray-300 text-lg">
           Real-time air quality data for cities worldwide
